@@ -28,7 +28,7 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClass = 'nl.applesaph.battle_ships.App'
+    mainClass = 'nl.applesaph.battleships.App'
 }
 
 tasks.named('test') {

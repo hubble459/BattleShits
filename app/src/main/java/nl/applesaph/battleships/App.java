@@ -1,6 +1,6 @@
-package nl.applesaph.battle_ships;
+package nl.applesaph.battleships;
 
-import nl.applesaph.battle_ships.server.Server;
+import nl.applesaph.battleships.server.Server;
 
 import java.io.IOException;
 import java.util.Scanner;

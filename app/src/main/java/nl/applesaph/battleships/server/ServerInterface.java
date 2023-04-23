@@ -1,4 +1,4 @@
-package nl.applesaph.battle_ships.server;
+package nl.applesaph.battleships.server;
 
 import java.io.IOException;
 import java.util.List;

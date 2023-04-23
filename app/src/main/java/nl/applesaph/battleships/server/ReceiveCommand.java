@@ -1,4 +1,4 @@
-package nl.applesaph.battle_ships.server;
+package nl.applesaph.battleships.server;
 
 /**
  * Is for me?

@@ -1,4 +1,4 @@
-package nl.applesaph.battle_ships.game.models;
+package nl.applesaph.battleships.game.models;
 
 import java.util.ArrayList;
 
@@ -52,5 +52,4 @@ public class Player {
 
         return true;
     }
-
 }

@@ -1,10 +1,10 @@
-package nl.applesaph.battle_ships.game;
+package nl.applesaph.battleships.game;
 
-import nl.applesaph.battle_ships.game.models.Player;
-import nl.applesaph.battle_ships.game.models.Ship;
-import nl.applesaph.battle_ships.game.models.ShipPart;
-import nl.applesaph.battle_ships.server.SendCommand;
-import nl.applesaph.battle_ships.server.Server;
+import nl.applesaph.battleships.game.models.Player;
+import nl.applesaph.battleships.game.models.Ship;
+import nl.applesaph.battleships.game.models.ShipPart;
+import nl.applesaph.battleships.server.SendCommand;
+import nl.applesaph.battleships.server.Server;
 
 import java.util.HashMap;
 import java.util.Random;

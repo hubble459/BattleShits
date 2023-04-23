@@ -1,7 +1,7 @@
-package nl.applesaph.battle_ships.server;
+package nl.applesaph.battleships.server;
 
-import nl.applesaph.battle_ships.game.Game;
-import nl.applesaph.battle_ships.game.models.Player;
+import nl.applesaph.battleships.game.Game;
+import nl.applesaph.battleships.game.models.Player;
 
 import java.io.BufferedReader;
 import java.io.IOException;
