@@ -17,6 +17,7 @@ public class ClientHandler implements Runnable {
     private final PrintWriter out;
     private final BufferedReader in;
     private final Server server;
+    private final String username;
     private boolean running;
     private long lastPong;
 
@@ -27,10 +28,11 @@ public class ClientHandler implements Runnable {
      * @param playerNumber integer
      * @throws IOException If the client doesn't want to talk, it's gonna throw this
      */
-    public ClientHandler(Socket socket, Server server, int playerNumber) throws IOException {
+    public ClientHandler(Socket socket, Server server, int playerNumber, String username) throws IOException {
         this.socket = socket;
         this.out = new PrintWriter(socket.getOutputStream());
         this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        this.username = username;
         this.running = true;
         this.server = server;
         this.playerNumber = playerNumber;
@@ -56,20 +58,8 @@ public class ClientHandler implements Runnable {
      * @throws IOException when the break up goes wrong (close method)
      */
     private void parseIncomingMessage(String line) throws IOException {
-        if (!line.equals("")) {
-            switch (line.split("~")[0]) {
-                case "EXIT" -> {
-                    server.handleCommand(ReceiveCommand.EXIT, this, line);
-                    close();
-                }
-                case "MOVE" -> server.handleCommand(ReceiveCommand.MOVE, this, line);
-                case "PING" -> server.handleCommand(ReceiveCommand.PING, this, line);
-                case "PONG" -> server.handleCommand(ReceiveCommand.PONG, this, line);
-                case "NEWGAME" -> server.handleCommand(ReceiveCommand.NEWGAME, this, line);
-                default -> server.sendToClient("ERROR~Invalid command", playerNumber);
-            }
-
-        }
+        final ReceiveCommand command = ReceiveCommand.tryParse(line);
+        server.handleCommand(command, this, line);
     }
 
     /**
@@ -77,9 +67,9 @@ public class ClientHandler implements Runnable {
      *
      * @throws IOException
      */
-    private void close() throws IOException {
+    protected void close() throws IOException {
         // :'<
-        System.out.println("[DISCONNECT] " + socket.getInetAddress() + ":" + socket.getPort() + " with username " + server.getUsername(playerNumber) + " [" + playerNumber + "]");
+        System.out.printf("[DISCONNECT] %s:%d with username %s [%d]%n", socket.getInetAddress(), socket.getPort(), server.getUsername(playerNumber), playerNumber);
         server.removeClient(playerNumber);
         in.close();
         out.close();
@@ -134,6 +124,13 @@ public class ClientHandler implements Runnable {
 
     public int getPlayerNumber() {
         return playerNumber;
+    }
+
+    /**
+     * @return the username
+     */
+    public String getUsername() {
+        return username;
     }
 
     public void setLastPong(long lastPong) {

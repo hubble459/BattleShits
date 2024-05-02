@@ -6,7 +6,6 @@ import nl.applesaph.battleships.game.models.Player;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
@@ -17,7 +16,6 @@ import java.util.List;
  */
 public class Server implements ServerInterface, Runnable {
     private final HashMap<Integer, ClientHandler> clientHandlers = new HashMap<>();
-    private final HashMap<Integer, String> usernames = new HashMap<>();
     private final Game game = new Game(this);
     private final int port;
     private ServerSocket serverSocket;
@@ -92,12 +90,23 @@ public class Server implements ServerInterface, Runnable {
     }
 
     /**
-     * Case sensitive
+     * Case insensitive
      */
     @Override
     public int checkUsernameLoggedIn(String username) {
         // If it fits on one line it's faster
-        return usernames.keySet().stream().filter(key -> usernames.get(key).equals(username)).findFirst().orElse(-1);
+        return clientHandlers
+            // Go through clients
+            .values()
+            .stream()
+            // Find clients matching the given username
+            .filter(client -> client.getUsername().equalsIgnoreCase(username))
+            // Stop searching when found
+            .findFirst()
+            // Map client to its player number
+            .map((client) -> client.getPlayerNumber())
+            // If not found return -1
+            .orElse(-1);
     }
 
     @Override
@@ -160,7 +169,7 @@ public class Server implements ServerInterface, Runnable {
     }
 
     public synchronized String getUsername(int playerNumber) {
-        return usernames.get(playerNumber);
+        return clientHandlers.get(playerNumber).getUsername();
     }
 
     @Override
@@ -171,8 +180,6 @@ public class Server implements ServerInterface, Runnable {
                 Socket socket = serverSocket.accept();
                 // Check for the first message, this should be the username
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                // Giving it a cold shoulder
-                PrintWriter out = new PrintWriter(socket.getOutputStream());
                 // Definitely a username without any weird characters
                 // or a 2gb line of text
                 String username = in.readLine();
@@ -180,25 +187,19 @@ public class Server implements ServerInterface, Runnable {
                 if (playerNumber != -1) {
                     if (!clientHandlers.isEmpty() && !clientHandlers.get(playerNumber).getSocket().isClosed()) {
                         socket.close();
+                        // When username is already taken, randomly close the client socket
                         continue;
                     }
-                    ClientHandler clientHandler = new ClientHandler(socket, this, playerNumber);
-                    Thread clientThread = new Thread(clientHandler);
-                    clientThread.start();
-
-                    // If you look closely you'll see that in the client handler
-                    // the client is adding itself to the server as well,
-                    // HashMap bae for just overwriting it tho <3
-                    clientHandlers.put(playerNumber, clientHandler);
-                    continue;
                 } else {
-                    // Easier than telling the client to pick a different name
-                    playerNumber = usernames.size() + 1;
-                    usernames.put(playerNumber, username);
+                    playerNumber = clientHandlers.size() + 1;
                 }
-                ClientHandler clientHandler = new ClientHandler(socket, this, playerNumber);
+                ClientHandler clientHandler = new ClientHandler(socket, this, playerNumber, username);
                 Thread clientThread = new Thread(clientHandler);
                 clientThread.start();
+
+                // If you look closely you'll see that in the client handler
+                // the client is adding itself to the server as well,
+                // HashMap bae for just overwriting it tho <3
                 clientHandlers.put(playerNumber, clientHandler);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -214,27 +215,43 @@ public class Server implements ServerInterface, Runnable {
      * @param command
      * @param clientHandler
      * @param line
+     * @throws IOException
      */
-    public void handleCommand(ReceiveCommand command, ClientHandler clientHandler, String line) {
+    public void handleCommand(ReceiveCommand command, ClientHandler clientHandler, String line) throws IOException {
+        final int playerNumber = clientHandler.getPlayerNumber();
+
         // Versatile command
         switch (command) {
-            case EXIT -> game.removePlayer(clientHandler.getPlayerNumber());
+            case EXIT -> {
+                game.removePlayer(playerNumber);
+                clientHandler.close();
+            }
             case MOVE -> {
-                if (!tryParse(line.split("~")[1]) && !tryParse(line.split("~")[2])) {
-                    sendCommand(SendCommand.ERROR, "Invalid move", clientHandler.getPlayerNumber());
+                final String[] commandParts = line.split("~");
+                if (commandParts.length != 3) {
+                    sendCommand(SendCommand.ERROR, "Invalid move", playerNumber);
                     break;
                 }
-                if (!game.isTurn(clientHandler.getPlayerNumber())) {
-                    sendCommand(SendCommand.ERROR, "Not your turn", clientHandler.getPlayerNumber());
+                final String xStr = commandParts[1];
+                final String yStr = commandParts[2];
+
+                if (!isNumeric(xStr) || !isNumeric(yStr)) {
+                    sendCommand(SendCommand.ERROR, "Invalid move", playerNumber);
                     break;
                 }
-                // A work of art, spanning a majestic 215 characters wide!
-                if (Integer.parseInt(line.split("~")[1]) < 0 || Integer.parseInt(line.split("~")[1]) > game.getGrid().length || Integer.parseInt(line.split("~")[2]) < 0 || Integer.parseInt(line.split("~")[2]) > game.getGrid()[0].length) {
-                    sendCommand(SendCommand.ERROR, "X and Y need to be between 0 and " + game.getGrid().length, clientHandler.getPlayerNumber());
+                if (!game.isTurn(playerNumber)) {
+                    sendCommand(SendCommand.ERROR, "Not your turn", playerNumber);
+                    break;
+                }
+                final int x = Integer.parseInt(xStr);
+                final int y = Integer.parseInt(yStr);
+                final int maxXSize = game.getGrid().length;
+                if (x < 0 || x > maxXSize || y < 0 || y > game.getGrid()[0].length) {
+                    sendCommand(SendCommand.ERROR, "X and Y need to be between 0 and " + maxXSize, playerNumber);
                     break;
                 }
                 // Tell client-chan what you want from it
-                handleTurnMessage(clientHandler, Integer.parseInt(line.split("~")[1]), Integer.parseInt(line.split("~")[2]));
+                handleTurnMessage(clientHandler, x, y);
             }
             // What language is this
             case PING -> clientHandler.send("PONG");
@@ -246,9 +263,8 @@ public class Server implements ServerInterface, Runnable {
                     sendCommand(SendCommand.ERROR, e.getMessage(), clientHandler.getPlayerNumber());
                 }
             }
-            default -> {
-                // Command not found, client is probably trying to cheat?
-                // Log their IP and file a report?!
+            case UNKNOWN -> {
+                sendCommand(SendCommand.ERROR, "Invalid command", playerNumber);
             }
         }
     }
@@ -257,8 +273,15 @@ public class Server implements ServerInterface, Runnable {
      * Someone wants to play!!!
      */
     public void startGame() {
-        // Most common error that gets thrown in this program
-        if (clientHandlers.size() < 2) throw new IllegalStateException("You need at least two connected clients to start a game!");
+        /*
+         * // Most common error that gets thrown in this program
+         * if (clientHandlers.size() < 2) throw new IllegalStateException("You need at least two connected clients to start a game!");
+         */
+        if (clientHandlers.size() < 2) {
+            // Add bots
+            
+        }
+
         // OMG what if people were playing?!
         game.resetGame();
         // Re-adding these broken souls
@@ -268,12 +291,12 @@ public class Server implements ServerInterface, Runnable {
     }
 
     /**
-     * Calling this method {@code isNumber} would be too obvious
+     * Check if string is numeric
      *
      * @param value possible number
      * @return true if number
      */
-    private boolean tryParse(String value) {
+    private boolean isNumeric(String value) {
         try {
             Integer.parseInt(value);
             return true;
@@ -284,7 +307,7 @@ public class Server implements ServerInterface, Runnable {
 
     /**
      * Send a basic command with empty string as message
-     * 
+     *
      * @param command
      * @param player
      */
@@ -294,7 +317,7 @@ public class Server implements ServerInterface, Runnable {
 
     /**
      * Send a command to a client
-     * 
+     *
      * @param command
      * @param message
      * @param player

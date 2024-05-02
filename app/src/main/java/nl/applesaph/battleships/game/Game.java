@@ -328,8 +328,8 @@ public class Game {
      */
     public void resetGame() {
         for (int y = 0; y < grid.length; y++) {
-            // Taking a different approach and using y to index grid here, instead of 0
-            for (int x = 0; x < grid[y].length; x++) {
+            // Taking a different approach and using x to index grid here, instead of 0
+            for (int x = 0; x < grid[x].length; x++) {
                 grid[x][y] = 0;
             }
         }
